@@ -1,59 +1,122 @@
 import streamlit as st
 import pandas as pd
+import pickle
 import numpy as np
-import joblib
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestRegressor
 
+# Load Random Forest Model
+with open('random_forest_model.pkl', 'rb') as file:
+    random_forest_model = pickle.load(file)
 
-# Define the preprocessor (assuming you used a similar preprocessor in training)
-categorical_features = ['type', 'region']
+# Load Dataset
+avocado_data = pd.read_csv('Avocado_Prices_Data.csv')
+
+# Preprocessor
+numerical_cols = ['TotalVolume', 'plu4046', 'plu4225', 'plu4770', 'TotalBags', 'SmallBags', 'LargeBags', 'XLargeBags']
+categorical_cols = ['type', 'region']
+
 preprocessor = ColumnTransformer(
     transformers=[
-        ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
-    ],
-    remainder='passthrough'
+        ('num', StandardScaler(), numerical_cols),
+        ('cat', OneHotEncoder(drop='first', handle_unknown='ignore'), categorical_cols)
+    ]
 )
 
-# Create a pipeline with the preprocessor and model
-pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('model', model)])
+# Registration and Login
+users = {"admin": "password"}  # Simple hardcoded user dictionary
 
-# Streamlit app
-st.title("Avocado Price Prediction")
+def main():
+    st.title("Avocado Price Prediction App")
+    
+    if 'authenticated' not in st.session_state:
+        st.session_state['authenticated'] = False
+    
+    if not st.session_state['authenticated']:
+        st.sidebar.title("User Authentication")
+        action = st.sidebar.radio("Choose Action", ["Login", "Register"])
+        
+        if action == "Register":
+            st.sidebar.header("Register")
+            username = st.sidebar.text_input("Enter a Username")
+            password = st.sidebar.text_input("Enter a Password", type="password")
+            confirm_password = st.sidebar.text_input("Confirm Password", type="password")
+            if st.sidebar.button("Register"):
+                if username in users:
+                    st.sidebar.error("User already exists.")
+                elif password != confirm_password:
+                    st.sidebar.error("Passwords do not match.")
+                else:
+                    users[username] = password
+                    st.sidebar.success("Registration successful. Please log in.")
+        
+        if action == "Login":
+            st.sidebar.header("Login")
+            username = st.sidebar.text_input("Username")
+            password = st.sidebar.text_input("Password", type="password")
+            if st.sidebar.button("Login"):
+                if username in users and users[username] == password:
+                    st.session_state['authenticated'] = True
+                    st.sidebar.success("Logged in successfully!")
+                else:
+                    st.sidebar.error("Invalid credentials.")
+    else:
+        # Welcome Page
+        st.image("avocado_image.jpg", use_column_width=True)
+        st.header("Welcome to Avocado Price Prediction!")
+        
+        # Exploratory Data Analysis (EDA)
+        st.subheader("Exploratory Data Analysis (EDA)")
+        st.write("Here are some insights from the dataset:")
+        st.write("Top 5 rows of the dataset:")
+        st.dataframe(avocado_data.head())
+        st.write("Summary Statistics:")
+        st.write(avocado_data.describe())
+        st.write("Missing values in the dataset:")
+        st.write(avocado_data.isnull().sum())
 
-# Input widgets for the features
-date = st.date_input("Date")
-average_price = st.number_input("Average Price", min_value=0.0, step=0.01)
-total_volume = st.number_input("Total Volume", min_value=0.0, step=0.01)
-plu4046 = st.number_input("PLU4046", min_value=0.0, step=0.01)
-plu4225 = st.number_input("PLU4225", min_value=0.0, step=0.01)
-plu4770 = st.number_input("PLU4770", min_value=0.0, step=0.01)
-total_bags = st.number_input("Total Bags", min_value=0.0, step=0.01)
-small_bags = st.number_input("Small Bags", min_value=0.0, step=0.01)
-large_bags = st.number_input("Large Bags", min_value=0.0, step=0.01)
-xlarge_bags = st.number_input("XLarge Bags", min_value=0.0, step=0.01)
-type_ = st.selectbox("Type", ['conventional', 'organic'])
-region = st.selectbox("Region", ['Albany', 'Atlanta', 'BaltimoreWashington'])
+        # Prediction Page
+        st.subheader("Predict Avocado Prices")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        with col1:
+            total_volume = st.number_input("Total Volume")
+        with col2:
+            plu4046 = st.number_input("PLU 4046")
+        with col3:
+            plu4225 = st.number_input("PLU 4225")
+        with col4:
+            plu4770 = st.number_input("PLU 4770")
+        with col5:
+            total_bags = st.number_input("Total Bags")
+        
+        type_option = st.selectbox("Select Type", avocado_data['type'].unique())
+        region_option = st.selectbox("Select Region", avocado_data['region'].unique())
+        
+        if st.button("Predict"):
+            input_data = pd.DataFrame({
+                'TotalVolume': [total_volume],
+                'plu4046': [plu4046],
+                'plu4225': [plu4225],
+                'plu4770': [plu4770],
+                'TotalBags': [total_bags],
+                'SmallBags': [0],  # Default or calculate based on logic
+                'LargeBags': [0],  # Default or calculate based on logic
+                'XLargeBags': [0],  # Default or calculate based on logic
+                'type': [type_option],
+                'region': [region_option]
+            })
+            transformed_input = preprocessor.transform(input_data)
+            prediction = random_forest_model.predict(transformed_input)
+            st.success(f"Predicted Average Price: ${prediction[0]:.2f}")
+        
+        # Contact Information
+        st.subheader("Contact Us")
+        st.text("Email: support@avocadoapp.com")
+        st.text("Phone: +1-800-AVOCADO")
+        st.text("Address: 123 Avocado Lane, Fruitville, USA")
 
-# Prepare data for prediction
-input_data = pd.DataFrame({
-    'Date': [pd.to_datetime(date)],
-    'AveragePrice': [average_price],
-    'TotalVolume': [total_volume],
-    'plu4046': [plu4046],
-    'plu4225': [plu4225],
-    'plu4770': [plu4770],
-    'TotalBags': [total_bags],
-    'SmallBags': [small_bags],
-    'LargeBags': [large_bags],
-    'XLargeBags': [xlarge_bags],
-    'type': [type_],
-    'region': [region]
-})
-
-# Make prediction
-if st.button("Predict"):
-    prediction = pipeline.predict(input_data.drop(columns='Date'))
-    st.write(f"Predicted Avocado Price: ${prediction[0]:.2f}")
+if __name__ == '__main__':
+    main()
