@@ -7,8 +7,6 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestRegressor
 
-# Load the trained model
-model = joblib.load('random_forest_model.pkl')
 
 # Define the preprocessor (assuming you used a similar preprocessor in training)
 categorical_features = ['type', 'region']
